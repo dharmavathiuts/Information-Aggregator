@@ -1,42 +1,36 @@
 import matplotlib.pyplot as plt
-from collections import Counter
 
-def visualize_article_sources(processed_articles):
+def visualize_news_sources(news_data):
     """
-    Creates a bar chart showing the distribution of articles by news source.
+    Plots a horizontal bar chart of news sources and the number of articles.
+    """
+    if not news_data or not news_data.get("articles"):
+        print("No news data available for visualization.")
+        return
 
-    :param processed_articles: List of article dictionaries.
-           Each article is expected to have a "source" key with a sub-key "name".
-    """
-    # Extract the news source names from the articles
-    sources = [article.get("source", {}).get("name", "Unknown") for article in processed_articles]
-    
-    # Count the occurrences of each source using Counter
-    source_counts = Counter(sources)
-    
-    # Debug: Print the computed counts (optional)
-    print("Article Counts per Source:", source_counts)
-    
-    # Create a bar chart using matplotlib
+    sources_count = {}
+    for article in news_data["articles"]:
+        source = article.get("source", {}).get("name", "Unknown")
+        sources_count[source] = sources_count.get(source, 0) + 1
+
+    sources = list(sources_count.keys())
+    counts = list(sources_count.values())
+
     plt.figure(figsize=(10, 6))
-    plt.bar(source_counts.keys(), source_counts.values(), color='skyblue')
-    plt.xlabel("News Sources")
-    plt.ylabel("Number of Articles")
-    plt.title("Distribution of Articles by Source")
-    plt.xticks(rotation=45, ha='right')
+    plt.barh(sources, counts, color="#1976d2")
+    plt.xlabel("Number of Articles")
+    plt.title("News Sources Distribution")
     plt.tight_layout()
     plt.show()
 
 if __name__ == "__main__":
-    # For testing purposes, use a simulated list of processed articles.
-    # In practice, you'll obtain this list from your Data Processor.
-    sample_articles = [
-        {"source": {"name": "IGN"}, "title": "Article 1"},
-        {"source": {"name": "My Nintendo News"}, "title": "Article 2"},
-        {"source": {"name": "IGN"}, "title": "Article 3"},
-        {"source": {"name": "CNET"}, "title": "Article 4"},
-        {"source": {"name": "IGN"}, "title": "Article 5"},
-        {"source": {"name": "Polygon"}, "title": "Article 6"},
-        {"source": {"name": "CNET"}, "title": "Article 7"}
-    ]
-    visualize_article_sources(sample_articles)
+    # For demonstration purposes
+    sample_news_data = {
+        "articles": [
+            {"source": {"name": "CNN"}, "title": "Article 1"},
+            {"source": {"name": "BBC"}, "title": "Article 2"},
+            {"source": {"name": "CNN"}, "title": "Article 3"},
+            {"source": {"name": "Reuters"}, "title": "Article 4"}
+        ]
+    }
+    visualize_news_sources(sample_news_data)

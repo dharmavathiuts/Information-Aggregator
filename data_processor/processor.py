@@ -4,95 +4,63 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from web_scraper.scraper import WebScraper
 from api_client.NewsAPIClient import NewsAPIClient
+from api_client.WeatherAPIClient import WeatherAPIClient
+from web_scraper.scraper import OnThisDayScraper
 
-class DataProcessor:
+class InformationAggregator:
     """
-    Processes and merges data from the News API and web scraper.
+    Aggregates information from news, weather, and "On This Day" events.
     """
+    def __init__(self, city, country, news_category):
+        self.city = city
+        self.country = country
+        self.news_category = news_category
+        self.news_client = NewsAPIClient("ba51b60d91964d2099fef0150aa4b076")
+        self.weather_client = WeatherAPIClient("ef8b843e8e4ba7daab6a544bced98daf")
+        self.on_this_day_scraper = OnThisDayScraper()
 
-    def __init__(self, scraper: WebScraper):
-        """
-        Initialize with an instance of the WebScraper.
+    def aggregate_info(self):
+        info = {}
+        # Weather info
+        weather_data = self.weather_client.get_weather(self.city)
+        if weather_data:
+            desc = weather_data["weather"][0]["description"]
+            temp = weather_data["main"]["temp"]
+            info["weather"] = f"Weather in {self.city}: {desc}, {temp}°C"
+        else:
+            info["weather"] = "Weather data not available."
 
-        :param scraper: An instance of the WebScraper class.
-        """
-        self.scraper = scraper
+        # News info: try top-headlines first, then fallback to global 'everything'
+        news_data = self.news_client.get_top_headlines(country=self.country, category=self.news_category)
+        if not (news_data and news_data.get("articles")):
+            # Fallback: use the global "everything" endpoint using the news category as query
+            news_data = self.news_client.get_everything(query=self.news_category)
+        if news_data and news_data.get("articles"):
+            articles = news_data["articles"]
+            headlines = [article["title"] for article in articles[:5]]
+            info["news"] = "Top News Headlines:\n" + "\n".join(headlines)
+            info["news_data"] = news_data  # For visualization
+        else:
+            info["news"] = "News data not available."
+            info["news_data"] = None
 
-    def merge_article_data(self, api_articles: list) -> list:
-        """
-        For each article from the API, fetch the full article content using the web scraper
-        and add it as a new key in the article dictionary.
+        # On This Day events
+        events = self.on_this_day_scraper.get_on_this_day_events()
+        if events:
+            info["on_this_day"] = "On This Day:\n" + "\n".join(events)
+        else:
+            info["on_this_day"] = "No events found."
 
-        :param api_articles: List of article dictionaries from the API.
-        :return: List of article dictionaries with an added "full_content" field.
-        """
-        processed_articles = []
-        for article in api_articles:
-            url = article.get("url")
-            # Scrape the full article content if URL is valid
-            scraped_content = self.scraper.scrape_article(url) if url else None
-            # Use scraped content if available; otherwise, fallback to API's "content" field if it exists
-            article["full_content"] = scraped_content if scraped_content else article.get("content")
-            processed_articles.append(article)
-        return processed_articles
-
-    def remove_duplicates(self, articles: list) -> list:
-        """
-        Remove duplicate articles based on the title.
-
-        :param articles: List of article dictionaries.
-        :return: List of unique articles.
-        """
-        seen_titles = set()
-        unique_articles = []
-        for article in articles:
-            title = article.get("title")
-            if title and title not in seen_titles:
-                unique_articles.append(article)
-                seen_titles.add(title)
-        return unique_articles
-
-    def process(self, api_response: dict) -> list:
-        """
-        Process the raw API response: merge article data and remove duplicates.
-
-        :param api_response: Raw API response containing articles.
-        :return: List of processed article dictionaries.
-        """
-        articles = api_response.get("articles", [])
-        # Merge data from API with full article content from the web scraper
-        merged_articles = self.merge_article_data(articles)
-        # Remove duplicate articles
-        unique_articles = self.remove_duplicates(merged_articles)
-        return unique_articles
-
+        return info
 
 if __name__ == "__main__":
-    # Example usage for testing the Data Processor module
-
-    # Use your NewsAPI API key
-    api_key = "ba51b60d91964d2099fef0150aa4b076"
-    client = NewsAPIClient(api_key)
-    
-    # Fetch top headlines for a category (e.g., technology)
-    api_response = client.get_top_headlines(country="us", category="technology")
-    
-    # Initialize the web scraper (set a common user agent)
-    scraper = WebScraper(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
-    
-    # Initialize DataProcessor with the scraper instance
-    processor = DataProcessor(scraper)
-    
-    # Process the API response to merge and clean articles
-    processed_articles = processor.process(api_response)
-    
-    # Display results: Print article title and first 200 characters of the full content for a quick check
-    print("Processed Articles:")
-    for article in processed_articles:
-        title = article.get("title")
-        content_snippet = article.get("full_content", "")[:200]  # show first 200 characters
-        print(f"Title: {title}")
-        print(f"Content Snippet: {content_snippet}")
-        print("-" * 80)
+    city = input("Enter city: ") or "London"
+    country = input("Enter country code (e.g., us, gb, de, fr): ") or "us"
+    category = input("Enter news category (e.g., general, business, entertainment, health, science, sports, technology): ") or "technology"
+    aggregator = InformationAggregator(city, country, category)
+    aggregated_info = aggregator.aggregate_info()
+    for key, value in aggregated_info.items():
+        print(f"{key.upper()}:")
+        print(value)
+        print("-" * 40)
